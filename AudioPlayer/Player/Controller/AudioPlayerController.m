@@ -19,7 +19,7 @@
     BOOL isPlaying; // 播放状态
     BOOL isRemoveNot; // 是否移除通知
     AudioPlayerMode _playerMode; // 播放模式
-    
+
     MusicModel *_playingModel; // 正在播放的model
     CGFloat _totalTime; // 总时间
 }
@@ -42,6 +42,10 @@ static AudioPlayerController *audioVC;
         audioVC = [[AudioPlayerController alloc] init];
         audioVC.view.backgroundColor = [UIColor whiteColor];
         audioVC.player = [[AVPlayer alloc]init];
+        //后台播放
+        AVAudioSession *session = [AVAudioSession sharedInstance];
+        [session setActive:YES error:nil];
+        [session setCategory:AVAudioSessionCategoryPlayback error:nil];
     });
     return audioVC;
 }
@@ -95,13 +99,9 @@ static AudioPlayerController *audioVC;
     playerItem = [AVPlayerItem playerItemWithURL:[NSURL URLWithString:model.fileName]];
     [self.player replaceCurrentItemWithPlayerItem:playerItem];
     [playerItem addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:nil];// 监听status属性
+    [self monitoringPlayback:playerItem];// 监听播放状态
     [self addNotification];
-    [self.player play];
     isRemoveNot = YES;
-    //后台播放
-    AVAudioSession *session = [AVAudioSession sharedInstance];
-    [session setActive:YES error:nil];
-    [session setCategory:AVAudioSessionCategoryPlayback error:nil];
 }
 
 // 各控件设初始值
@@ -127,8 +127,7 @@ static AudioPlayerController *audioVC;
             NSLog(@"AVPlayerStatusReadyToPlay");
             CMTime duration = item.duration;// 获取视频总长度
             [self setMaxDuratuin:CMTimeGetSeconds(duration)];
-            [self monitoringPlayback:item];// 监听播放状态
-            [self startMusic];
+            [self play];
         }else if([playerItem status] == AVPlayerStatusFailed) {
             NSLog(@"AVPlayerStatusFailed");
             [self stop];
@@ -261,13 +260,8 @@ static AudioPlayerController *audioVC;
 }
 
 - (void)play{
-    [self startMusic];
-    [self.player play];
-}
-
-// 真正开播
-- (void)startMusic{
     isPlaying = YES;
+    [self.player play];
     [self.playButton setImage:[UIImage imageNamed:@"MusicPlayer_播放"] forState:UIControlStateNormal];
     // 开始旋转
     [self.rotatingView resumeLayer];
@@ -296,11 +290,9 @@ static AudioPlayerController *audioVC;
 - (void)removeNotification{
     [self.player replaceCurrentItemWithPlayerItem:nil];
     [playerItem removeObserver:self forKeyPath:@"status"];
-    if (_playTimeObserver) {
-        [self.player removeTimeObserver:_playTimeObserver];
-        _playTimeObserver = nil;
-    }
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [self.player removeTimeObserver:_playTimeObserver];
+    _playTimeObserver = nil;
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
 }
 
 #pragma mark - 后台UI设置
