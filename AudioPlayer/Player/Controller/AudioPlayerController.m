@@ -71,7 +71,7 @@ static AudioPlayerController *audioVC;
 - (void)updateAudioPlayer{
     if (isRemoveNot) {
         // 如果已经存在 移除通知、KVO，各控件设初始值
-        [self removeNotification];
+        [self removeObserverAndNotification];
         [self initialControls];
         isRemoveNot = NO;
     }
@@ -100,13 +100,13 @@ static AudioPlayerController *audioVC;
     [self.player replaceCurrentItemWithPlayerItem:playerItem];
     [playerItem addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:nil];// 监听status属性
     [self monitoringPlayback:playerItem];// 监听播放状态
-    [self addNotification];
+    [self addEndTimeNotification];
     isRemoveNot = YES;
 }
 
 // 各控件设初始值
 - (void)initialControls{
-    [self stopMusic];
+    [self stop];
     self.playingTime.text = @"00:00";
     self.paceSlider.value = 0.0f;
     [self.rotatingView removeAnimation];
@@ -123,7 +123,6 @@ static AudioPlayerController *audioVC;
     AVPlayerItem *item = (AVPlayerItem *)object;
     if ([keyPath isEqualToString:@"status"]) {
         if ([playerItem status] == AVPlayerStatusReadyToPlay) {
-            isPlaying = YES;
             NSLog(@"AVPlayerStatusReadyToPlay");
             CMTime duration = item.duration;// 获取视频总长度
             [self setMaxDuratuin:CMTimeGetSeconds(duration)];
@@ -164,7 +163,7 @@ static AudioPlayerController *audioVC;
     [playerItem seekToTime:dragedCMTime];
 }
 
--(void)addNotification{
+-(void)addEndTimeNotification{
     //给AVPlayerItem添加播放完成通知
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playbackFinished:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
 }
@@ -172,10 +171,9 @@ static AudioPlayerController *audioVC;
 -(void)playbackFinished:(NSNotification *)notification{
     NSLog(@"视频播放完成.");
     if (_playerMode == AudioPlayerModeSinglePlay) {
-        [self stop];
         playerItem = [notification object];
         [playerItem seekToTime:kCMTimeZero];
-        [self play];
+        [self.player play];
     }else{
         [self nextIndexAdd];
         [self updateAudioPlayer];
@@ -268,12 +266,8 @@ static AudioPlayerController *audioVC;
 }
 
 - (void)stop{
-    [self.player pause];
-    [self stopMusic];
-}
-
-- (void)stopMusic{
     isPlaying = NO;
+    [self.player pause];
     [self.playButton setImage:[UIImage imageNamed:@"MusicPlayer_暂停"] forState:UIControlStateNormal];
     // 停止旋转
     [self.rotatingView pauseLayer];
@@ -287,7 +281,7 @@ static AudioPlayerController *audioVC;
 }
 
 #pragma mark - 移除通知&KVO
-- (void)removeNotification{
+- (void)removeObserverAndNotification{
     [self.player replaceCurrentItemWithPlayerItem:nil];
     [playerItem removeObserver:self forKeyPath:@"status"];
     [self.player removeTimeObserver:_playTimeObserver];
